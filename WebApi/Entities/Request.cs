@@ -53,7 +53,7 @@
         /// <summary>
         /// The level of charge in kWh the car battery at any one time, Example: 12
         /// </summary>
-        public decimal CurrentyBatteryLevel { get; set; }
+        public decimal CurrentBatteryLevel { get; set; }
     }
 
     public record ChargingTimeSpan(DateTime StartTime, DateTime EndTime, bool IsCharging);
