@@ -13,7 +13,7 @@ namespace WebApi.Controllers
         {
             
         }
-        [HttpGet]
+        [HttpPost]
         public IEnumerable<ChargingTimeSpan> GetCharingSchedule([FromBody]Request request)
         {
             // placing the logic here temporarily, will move it to a calculator
@@ -32,7 +32,7 @@ namespace WebApi.Controllers
             if (currentChargePercentage < userSettings.DirectChargingPercentage)
             {
                 // we need the kWh amount to know how long we need to charge
-                var directAmount = userSettings.DirectChargingPercentage / 100 * carData.BatteryCapacity;
+                var directAmount = (decimal)userSettings.DirectChargingPercentage / 100 * carData.BatteryCapacity;
 
                 // calculating time needed based on missing charge and charge power -> kWh / kW = h
                 var requiredTimeToReachDirectAmount = (directAmount - carData.CurrentBatteryLevel) / carData.ChargePower;
@@ -65,6 +65,7 @@ namespace WebApi.Controllers
                     var end = TimeOnly.Parse(t.EndTime);
 
                     // IsBetween will return false if start is 23:00 and end is 2:00
+                    // possible solution: use DateTime for cases when start is greater than end
                     if (currentTime.Equals(start) || currentTime.IsBetween(start, end))
                     {
                         var endDateTime = currentStartingTime.Add(end - currentTime);
