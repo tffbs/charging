@@ -8,13 +8,13 @@ namespace WebApi.Controllers
 
     public class ChargingScheduleController : ControllerBase
     {
-        
+
         public ChargingScheduleController()
         {
-            
+
         }
         [HttpPost]
-        public IEnumerable<ChargingTimeSpan> GetCharingSchedule([FromBody]Request request)
+        public IEnumerable<ChargingTimeSpan> GetCharingSchedule([FromBody] Request request)
         {
             // placing the logic here temporarily, will move it to a calculator
 
@@ -69,8 +69,8 @@ namespace WebApi.Controllers
                     if (currentTime.Equals(start) || currentTime.IsBetween(start, end))
                     {
                         var endDateTime = currentStartingTime.Add(end - currentTime);
-                        var tariffEndDate = DateTime.Compare(endDateTime, leavingDateTime) <= 0  ? endDateTime : leavingDateTime;
-                        possibleTimeSpans.Add(new TariffTimeSpan(currentStartingTime, tariffEndDate , t.EnergyPrice));
+                        var tariffEndDate = DateTime.Compare(endDateTime, leavingDateTime) <= 0 ? endDateTime : leavingDateTime;
+                        possibleTimeSpans.Add(new TariffTimeSpan(currentStartingTime, tariffEndDate, t.EnergyPrice));
 
                         currentStartingTime = tariffEndDate;
                         break;
@@ -78,21 +78,46 @@ namespace WebApi.Controllers
                 }
             }
 
+            // order the tariff prices to efficiently select the cheapest one
             var tariffPrices = userSettings.Tariffs.Select(t => t.EnergyPrice).Distinct().Order().ToArray();
+            // calculating remaining charging time 
             var remainingCharge = (userSettings.DesiredStateOfCharge - currentChargePercentage) / 100 * carData.BatteryCapacity / carData.ChargePower;
             var remainingChargingTime = TimeSpan.FromHours((double)remainingCharge);
 
-            for ( var i = 0; i < tariffPrices.Count(); i++)
+            // going from the lowest price, set the timespans to charging
+            // as the remaining time gets shorter we go up in price
+            // this way we'll find the cheapest charge
+            for (var i = 0; i < tariffPrices.Count(); i++)
             {
                 foreach (var spanWithTariff in possibleTimeSpans)
                 {
-                    if(spanWithTariff.IsCharging is false && spanWithTariff.EnergyPrice == tariffPrices[i])
+                    // check if we are charging in the particular timespan and if the price is low
+                    if (spanWithTariff.IsCharging is false && spanWithTariff.EnergyPrice == tariffPrices[i])
                     {
                         spanWithTariff.IsCharging = true;
-                        // this will definitely result in overcharge, we'll have to break up the last timespan (that WOULD result in an overcharge) to a charging and non chargning entry
-                        remainingChargingTime -= spanWithTariff.EndTime - spanWithTariff.StartTime;
+                        var spanWithTariffElapsedTime = spanWithTariff.EndTime - spanWithTariff.StartTime;
 
-                        if(remainingChargingTime <= TimeSpan.Zero) break;
+                        // if there is still remaining charging time stay in the loop
+                        if (spanWithTariffElapsedTime <= remainingChargingTime)
+                        {
+                            remainingChargingTime -= spanWithTariffElapsedTime;
+                            continue;
+                        }
+
+                        // if there isn't exit the loop
+                        if (remainingChargingTime <= TimeSpan.Zero) break;
+
+                        // if we would exceed the desired capacity break up the span to charging and non-charging timespans
+                        var endTimeForCharging = spanWithTariff.StartTime.Add(remainingChargingTime);
+
+                        var chargingTimeSpan = new TariffTimeSpan(spanWithTariff.StartTime, endTimeForCharging, spanWithTariff.EnergyPrice) { IsCharging = true };
+                        var notChargingTimeSpan = new TariffTimeSpan(endTimeForCharging, spanWithTariff.EndTime, spanWithTariff.EnergyPrice);
+
+                        possibleTimeSpans.Insert(possibleTimeSpans.IndexOf(spanWithTariff) + 1, chargingTimeSpan);
+                        possibleTimeSpans.Insert(possibleTimeSpans.IndexOf(spanWithTariff) + 2, notChargingTimeSpan);
+                        possibleTimeSpans.Remove(spanWithTariff);
+                        remainingChargingTime = TimeSpan.Zero;
+                        break;
                     }
                 }
 
