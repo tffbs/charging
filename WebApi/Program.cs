@@ -9,7 +9,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddSingleton<CalculatorService>();
+builder.Services.AddSingleton<ScheduleService>();
 
 var app = builder.Build();
 

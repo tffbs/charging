@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using WebApi.ExtensionMethods;
 using WebApi.Model;
 using WebApi.Services;
 
@@ -9,9 +10,9 @@ namespace WebApi.Controllers
 
     public class ChargingScheduleController : ControllerBase
     {
-        private readonly CalculatorService _calculator;
+        private readonly ScheduleService _calculator;
 
-        public ChargingScheduleController(CalculatorService calculator)
+        public ChargingScheduleController(ScheduleService calculator)
         {
             _calculator = calculator;
         }
@@ -80,7 +81,7 @@ namespace WebApi.Controllers
                 schedule.Add(chargingTimeSpan);
                 schedule.Add(notChargingTimeSpan);
 
-                return schedule;
+                return schedule.MergeTimeSpans();
             }
 
             while (DateTime.Compare(currentStartingDateTime, leavingDateTime) < 0)
@@ -106,50 +107,12 @@ namespace WebApi.Controllers
 
             // order the tariff prices to efficiently select the cheapest one
             var tariffPrices = userSettings.Tariffs.Select(t => t.EnergyPrice).Distinct().Order().ToArray();
-            
-            // going from the lowest price, set the timespans to charging
-            // as the remaining time gets shorter we go up in price
-            // this way we'll find the cheapest charge
-            for (var i = 0; i < tariffPrices.Count(); i++)
-            {
-                foreach (var spanWithTariff in possibleTimeSpans)
-                {
-                    // check if we are charging in the particular timespan and if the price is low
-                    if (spanWithTariff.IsCharging is false && spanWithTariff.EnergyPrice == tariffPrices[i])
-                    {
-                        spanWithTariff.IsCharging = true;
-                        var spanWithTariffElapsedTime = spanWithTariff.EndTime - spanWithTariff.StartTime;
 
-                        // if there is still remaining charging time stay in the loop
-                        if (spanWithTariffElapsedTime <= remainingChargingTime)
-                        {
-                            remainingChargingTime -= spanWithTariffElapsedTime;
-                            continue;
-                        }
-
-                        // if there isn't exit the loop
-                        if (remainingChargingTime <= TimeSpan.Zero) break;
-
-                        // if we would exceed the desired capacity break up the span to charging and non-charging timespans
-                        var endTimeForCharging = spanWithTariff.StartTime.Add(remainingChargingTime);
-
-                        var chargingTimeSpan = new TariffTimeSpan(spanWithTariff.StartTime, endTimeForCharging, spanWithTariff.EnergyPrice) { IsCharging = true };
-                        var notChargingTimeSpan = new TariffTimeSpan(endTimeForCharging, spanWithTariff.EndTime, spanWithTariff.EnergyPrice);
-
-                        possibleTimeSpans.Insert(possibleTimeSpans.IndexOf(spanWithTariff) + 1, chargingTimeSpan);
-                        possibleTimeSpans.Insert(possibleTimeSpans.IndexOf(spanWithTariff) + 2, notChargingTimeSpan);
-                        possibleTimeSpans.Remove(spanWithTariff);
-                        remainingChargingTime = TimeSpan.Zero;
-                        break;
-                    }
-                }
-
-                if (remainingChargingTime <= TimeSpan.Zero) break;
-            }
+            possibleTimeSpans.SetChargingTariffSpans(tariffPrices, remainingChargingTime);
 
             schedule.AddRange(possibleTimeSpans.Select(t => new ChargingTimeSpan(t.StartTime, t.EndTime, t.IsCharging)));
 
-            return schedule;
+            return schedule.MergeTimeSpans();
         }
     }
 }

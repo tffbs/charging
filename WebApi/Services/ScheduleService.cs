@@ -2,9 +2,9 @@
 
 namespace WebApi.Services
 {
-    public class CalculatorService
+    public class ScheduleService
     {
-        public CalculatorService()
+        public ScheduleService()
         {
             
         }
