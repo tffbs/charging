@@ -30,30 +30,25 @@ namespace WebApi.ExtensionMethods
         public static void SetChargingTariffSpans(this List<TariffTimeSpan> possibleTimeSpans, decimal[] tariffPrices, TimeSpan remainingChargingTime)
         {
 
-            // going from the lowest price, set the timespans to charging
-            // as the remaining time gets shorter we go up in price
-            // this way we'll find the cheapest charge
+            
             for (var i = 0; i < tariffPrices.Count(); i++)
             {
                 foreach (var spanWithTariff in possibleTimeSpans)
                 {
-                    // check if we are charging in the particular timespan and if the price is low
                     if (spanWithTariff.IsCharging is false && spanWithTariff.EnergyPrice == tariffPrices[i])
                     {
                         spanWithTariff.IsCharging = true;
                         var spanWithTariffElapsedTime = spanWithTariff.EndTime - spanWithTariff.StartTime;
 
-                        // if there is still remaining charging time stay in the loop
+                        
                         if (spanWithTariffElapsedTime <= remainingChargingTime)
                         {
                             remainingChargingTime -= spanWithTariffElapsedTime;
                             continue;
                         }
 
-                        // if there isn't exit the loop
                         if (remainingChargingTime <= TimeSpan.Zero) break;
 
-                        // if we would exceed the desired capacity break up the span to charging and non-charging timespans
                         var endTimeForCharging = spanWithTariff.StartTime.Add(remainingChargingTime);
 
                         var chargingTimeSpan = new TariffTimeSpan(spanWithTariff.StartTime, endTimeForCharging, spanWithTariff.EnergyPrice) { IsCharging = true };

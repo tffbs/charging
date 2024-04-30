@@ -33,38 +33,29 @@ namespace WebApi.Controllers
             var timeLeftUntilLeavingTime = leavingTime != currentStartingTime ? leavingTime - currentStartingTime : TimeSpan.FromHours(24);
             var leavingDateTime = request.StartingTime.Add(timeLeftUntilLeavingTime);
 
-            // conversion to percentage, as user settings contains percentage, while car data has kWh
             var currentChargePercentage = request.CarData.CurrentBatteryLevel / request.CarData.BatteryCapacity * 100;
 
-            // if we are on the desired state of charge, return
             if (currentChargePercentage >= request.UserSettings.DesiredStateOfCharge)
             {
                 schedule.Add(new ChargingTimeSpan(currentStartingDateTime, leavingDateTime, false));
                 return schedule;
             }
 
-            // check if we need to direct charge
             if (currentChargePercentage < request.UserSettings.DirectChargingPercentage)
             {
-                // we need the kWh amount to know how long we need to charge
                 var directAmount = (decimal)request.UserSettings.DirectChargingPercentage / 100 * request.CarData.BatteryCapacity;
 
-                // calculating time needed based on missing charge and charge power -> kWh / kW = h
                 var requiredTimeToReachDirectAmount = (directAmount - request.CarData.CurrentBatteryLevel) / request.CarData.ChargePower;
-                // converting hours in decimal to DateTime -> might be some loss of accuracy due to decimal to double casting 
                 var endTime = request.StartingTime.AddHours((double)requiredTimeToReachDirectAmount);
 
-                // adjust starting time and current percentage
                 currentStartingDateTime = endTime;
                 currentChargePercentage = request.UserSettings.DirectChargingPercentage;
 
-                // adding the time span to the response
                 schedule.Add(new ChargingTimeSpan(request.StartingTime, endTime, true));
             }
 
             var tariffs = request.UserSettings.Tariffs;
 
-            // calculating remaining charging time 
             var remainingCharge = (request.UserSettings.DesiredStateOfCharge - currentChargePercentage) / 100 * request.CarData.BatteryCapacity / request.CarData.ChargePower;
             var remainingChargingTime = TimeSpan.FromHours((double)remainingCharge);
 
@@ -83,7 +74,6 @@ namespace WebApi.Controllers
 
             var possibleTimeSpans = _service.CreatePossibleTimeSpans(tariffs, currentStartingDateTime, leavingDateTime);
 
-            // order the tariff prices to efficiently select the cheapest one
             var tariffPrices = request.UserSettings.Tariffs.Select(t => t.EnergyPrice).Distinct().Order().ToArray();
 
             possibleTimeSpans.SetChargingTariffSpans(tariffPrices, remainingChargingTime);
